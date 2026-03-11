@@ -23,7 +23,7 @@ if (missing.length > 0) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PORT              = process.env.PORT || 3000;
-const DB_PATH           = '/alerts/gasValue';
+const DB_PATH           = 'esp32-001/gas/value';
 const CALL_COOLDOWN_MS  = 2 * 60 * 1000; // 2 minutes
 const LEVEL1_THRESHOLD  = 500;
 const LEVEL2_THRESHOLD  = 1000;
