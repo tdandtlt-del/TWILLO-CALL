@@ -172,7 +172,7 @@ app.get('/twiml', (req, res) => {
   res.type('text/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Amy" loop="3">
+  <Say voice="alice" loop="3">
     Attention. AegisAir emergency alert. Gas levels are dangerously high. Please evacuate and follow safety procedures.
   </Say>
   <Pause length="1"/>
