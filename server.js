@@ -13,6 +13,7 @@ const REQUIRED_ENV = [
   'USER_PHONE',
   'FIREBASE_DATABASE_URL',
   'FIREBASE_SERVICE_ACCOUNT',
+  'PUBLIC_URL', // e.g. https://your-service.up.railway.app
 ];
 
 const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
@@ -52,11 +53,7 @@ let lastCallTime = 0; // epoch ms of last call triggered
 
 // ─── Helper: Send SMS ─────────────────────────────────────────────────────────
 async function sendSMS(gasValue) {
-  const body =
-    `⚠️ Gas Leak Warning\n\n` +
-    `Gas concentration has reached a dangerous level.\n\n` +
-    `Current reading: ${gasValue} ppm\n\n` +
-    `Please check the kitchen immediately.`;
+  const body = `AegisAir Alert: Gas leak detected. Safety protocol activated. Please take necessary safety precautions immediately.`;
 
   try {
     const msg = await twilioClient.messages.create({
@@ -81,22 +78,17 @@ async function triggerCall(gasValue) {
     return;
   }
 
-  // Twilio speaks this TwiML during the call
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice" loop="2">
-    Emergency alert. Dangerous gas levels detected in the kitchen. Please check immediately.
-  </Say>
-</Response>`;
+  // Twilio fetches this URL when the call connects — far more reliable than inline TwiML
+  const twimlUrl = `${process.env.PUBLIC_URL.replace(/\/$/, '')}/twiml`;
 
   try {
     const call = await twilioClient.calls.create({
-      twiml,
+      url: twimlUrl,
       from: process.env.TWILIO_PHONE,
       to: process.env.USER_PHONE,
     });
     lastCallTime = now;
-    console.log(`📞 Voice call triggered [SID: ${call.sid}] — gasValue: ${gasValue} ppm`);
+    console.log(`📞 Voice call triggered [SID: ${call.sid}] — gasValue: ${gasValue} ppm | TwiML: ${twimlUrl}`);
   } catch (err) {
     console.error(`❌  Voice call failed: ${err.message}`);
   }
@@ -174,6 +166,18 @@ function startFirebaseListener() {
 // ─── Express App ─────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
+
+// ─── TwiML Endpoint — Twilio fetches this when call connects ─────────────────
+app.get('/twiml', (req, res) => {
+  res.type('text/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Amy" loop="3">
+    Attention. AegisAir emergency alert. Gas levels are dangerously high. Please evacuate and follow safety procedures.
+  </Say>
+  <Pause length="1"/>
+</Response>`);
+});
 
 // Health check — Railway uses this to know the service is alive
 app.get('/', (req, res) => {
