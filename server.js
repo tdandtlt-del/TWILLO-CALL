@@ -2,8 +2,8 @@
 
 require('dotenv').config();
 const express = require('express');
-const admin   = require('firebase-admin');
-const twilio  = require('twilio');
+const admin = require('firebase-admin');
+const twilio = require('twilio');
 
 // ─── Validate Required Environment Variables ─────────────────────────────────
 const REQUIRED_ENV = [
@@ -22,11 +22,11 @@ if (missing.length > 0) {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const PORT              = process.env.PORT || 3000;
-const DB_PATH           = 'esp32-001/gas/value';
-const CALL_COOLDOWN_MS  = 2 * 60 * 1000; // 2 minutes
-const LEVEL1_THRESHOLD  = 500;
-const LEVEL2_THRESHOLD  = 1000;
+const PORT = process.env.PORT || 3000;
+const DB_PATH = 'devices/esp32-001/gas';
+const CALL_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
+const LEVEL1_THRESHOLD = 500;
+const LEVEL2_THRESHOLD = 1000;
 
 // ─── Twilio Client ────────────────────────────────────────────────────────────
 const twilioClient = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
@@ -41,7 +41,7 @@ try {
 }
 
 admin.initializeApp({
-  credential:  admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert(serviceAccount),
   databaseURL: process.env.FIREBASE_DATABASE_URL,
 });
 
@@ -62,7 +62,7 @@ async function sendSMS(gasValue) {
     const msg = await twilioClient.messages.create({
       body,
       from: process.env.TWILIO_PHONE,
-      to:   process.env.USER_PHONE,
+      to: process.env.USER_PHONE,
     });
     console.log(`📱 SMS sent [SID: ${msg.sid}] — gasValue: ${gasValue} ppm`);
   } catch (err) {
@@ -93,7 +93,7 @@ async function triggerCall(gasValue) {
     const call = await twilioClient.calls.create({
       twiml,
       from: process.env.TWILIO_PHONE,
-      to:   process.env.USER_PHONE,
+      to: process.env.USER_PHONE,
     });
     lastCallTime = now;
     console.log(`📞 Voice call triggered [SID: ${call.sid}] — gasValue: ${gasValue} ppm`);
@@ -136,10 +136,30 @@ function startFirebaseListener() {
         return;
       }
 
-      const gasValue = Number(raw);
+      // Gas node is an object: { value, spike, rateOfRise }
+      // but also handle plain number for forward compatibility
+      let gasValue;
+      let spike = false;
+
+      if (typeof raw === 'object') {
+        gasValue = Number(raw.value);
+        spike = raw.spike === true;
+      } else {
+        gasValue = Number(raw);
+      }
 
       if (isNaN(gasValue)) {
-        console.warn(`⚠️  Non-numeric gasValue received: "${raw}" — skipping`);
+        console.warn(`⚠️  Non-numeric gasValue received: "${JSON.stringify(raw)}" — skipping`);
+        return;
+      }
+
+      console.log(`🌡️  Gas snapshot → value: ${gasValue} ppm | spike: ${spike}`);
+
+      // If ESP32 flagged a spike, treat as critical regardless of threshold
+      if (spike) {
+        console.log(`⚡ Spike detected by ESP32 — forcing LEVEL 2 CRITICAL alert`);
+        await sendSMS(gasValue);
+        await triggerCall(gasValue);
         return;
       }
 
@@ -159,15 +179,15 @@ app.use(express.json());
 app.get('/', (req, res) => {
   const cooldownRemaining = Math.max(0, CALL_COOLDOWN_MS - (Date.now() - lastCallTime));
   res.json({
-    status:    'running',
-    service:   'Aegis Air Calling — Gas Alert Service',
+    status: 'running',
+    service: 'Aegis Air Calling — Gas Alert Service',
     listening: DB_PATH,
     thresholds: {
-      warning:  `>= ${LEVEL1_THRESHOLD} ppm → SMS`,
+      warning: `>= ${LEVEL1_THRESHOLD} ppm → SMS`,
       critical: `>= ${LEVEL2_THRESHOLD} ppm → SMS + Voice Call`,
     },
     callCooldown: {
-      totalMs:     CALL_COOLDOWN_MS,
+      totalMs: CALL_COOLDOWN_MS,
       remainingMs: cooldownRemaining,
     },
     timestamp: new Date().toISOString(),
