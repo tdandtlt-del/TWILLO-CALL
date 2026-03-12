@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 3000;
 const DB_PATH = 'devices/esp32-001/gas';
 const CALL_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 const LEVEL1_THRESHOLD = 500;
-const LEVEL2_THRESHOLD = 1000;
+const LEVEL2_THRESHOLD = 900;
 
 // ─── Twilio Client ────────────────────────────────────────────────────────────
 const twilioClient = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
